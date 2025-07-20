@@ -4,7 +4,7 @@ const BOARD_SIZE = 1000;
 const INIT_ZOOM = 1;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 20;
-const CANVAS_VIEWPORT = 500; // 画布显示窗口（px）
+const CANVAS_VIEWPORT = 500;
 
 const COLORS = [
   "#FFFFFF", "#000000", "#FF0000", "#00FF00", "#0000FF",
@@ -20,6 +20,7 @@ export default function Home() {
   const [board, setBoard] = useState([]);
   const [zoom, setZoom] = useState(INIT_ZOOM);
   const [message, setMessage] = useState("");
+  const [paletteOpen, setPaletteOpen] = useState(false);
 
   // 拉取画布数据
   const fetchBoard = () => {
@@ -48,7 +49,6 @@ export default function Home() {
     const imageData = ctx.createImageData(BOARD_SIZE, BOARD_SIZE);
     for (let y = 0; y < BOARD_SIZE; y++) {
       for (let x = 0; x < BOARD_SIZE; x++) {
-        // 确保每个像素都渲染成有效颜色
         const color = board[y][x] ? board[y][x] : "#FFFFFF";
         const idx = (y * BOARD_SIZE + x) * 4;
         const rgb = hexToRgb(color);
@@ -96,6 +96,14 @@ export default function Home() {
     }
   }, [cooldown]);
 
+  // 缩放处理
+  const handleZoomChange = (value) => {
+    setZoom(value);
+  };
+
+  // 悬浮调色板
+  const paletteBtnSize = 54;
+
   return (
     <div style={{
       minHeight: "100vh",
@@ -119,30 +127,6 @@ export default function Home() {
           fontWeight: 600,
           fontSize: 24
         }}>像素大战</h2>
-        <div style={{
-          margin: "28px 0 18px 0",
-          display: "flex",
-          flexWrap: "wrap",
-          gap: "8px",
-          justifyContent: "center"
-        }}>
-          {COLORS.map(c => (
-            <button
-              key={c}
-              style={{
-                background: c,
-                width: 32, height: 32,
-                borderRadius: 8,
-                border: selectedColor === c ? "3px solid #444" : "1px solid #ccc",
-                cursor: "pointer",
-                outline: "none",
-                boxShadow: selectedColor === c ? "0 0 0 2px #8882" : ""
-              }}
-              onClick={() => setSelectedColor(c)}
-              aria-label={c}
-            />
-          ))}
-        </div>
         <div style={{
           textAlign: "center",
           marginBottom: 12,
@@ -234,6 +218,78 @@ export default function Home() {
             fontWeight: 500
           }}>{message}</div>
         )}
+
+        {/* 悬浮调色板 */}
+        <div style={{
+          position: "fixed",
+          right: 32,
+          bottom: 32,
+          zIndex: 9999,
+          display: "flex",
+          flexDirection: "column",
+          alignItems: "flex-end"
+        }}>
+          {/* 展开色板 */}
+          <div style={{
+            transition: "all 0.3s",
+            opacity: paletteOpen ? 1 : 0,
+            pointerEvents: paletteOpen ? "auto" : "none",
+            transform: paletteOpen ? "translateY(0)" : "translateY(20px)",
+            marginBottom: paletteOpen ? 16 : 0,
+            boxShadow: "0 4px 24px #0003",
+            borderRadius: 18,
+            background: "#fff",
+            padding: paletteOpen ? "14px 14px 6px 14px" : "0",
+            display: paletteOpen ? "grid" : "none",
+            gridTemplateColumns: "repeat(5, 36px)",
+            gap: "8px"
+          }}>
+            {COLORS.map(c => (
+              <button
+                key={c}
+                style={{
+                  background: c,
+                  width: 34, height: 34,
+                  borderRadius: "50%",
+                  border: selectedColor === c ? "3px solid #444" : "1px solid #ccc",
+                  cursor: "pointer",
+                  outline: "none",
+                  boxShadow: selectedColor === c ? "0 0 0 2px #8882" : "",
+                  transition: "border 0.15s"
+                }}
+                onClick={() => {
+                  setSelectedColor(c);
+                  setPaletteOpen(false);
+                }}
+                aria-label={c}
+              />
+            ))}
+          </div>
+          {/* 悬浮按钮 */}
+          <button
+            onClick={() => setPaletteOpen(!paletteOpen)}
+            style={{
+              width: paletteBtnSize,
+              height: paletteBtnSize,
+              borderRadius: "50%",
+              border: "none",
+              background: selectedColor,
+              boxShadow: "0 2px 16px #0002",
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              cursor: "pointer",
+              transition: "background 0.3s"
+            }}
+            title="选择颜色"
+          >
+            <svg width="28" height="28" viewBox="0 0 32 32" fill="none">
+              <circle cx="16" cy="16" r="13" fill="white" opacity="0.65"/>
+              <path d="M10 16a6 6 0 1 1 12 0c0 1-1 2-2 2h-8c-1 0-2-1-2-2z" fill="#444"/>
+              <circle cx="16" cy="21" r="2" fill="#444"/>
+            </svg>
+          </button>
+        </div>
       </div>
     </div>
   );
@@ -243,7 +299,7 @@ export default function Home() {
 function hexToRgb(hex) {
   let h = hex.replace("#", "");
   if (h.length === 3) h = h.split("").map(x => x + x).join("");
-  if (h === "") return [255, 255, 255]; // 空色渲染成白色
+  if (h === "") return [255, 255, 255];
   const num = parseInt(h, 16);
   return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
 }
