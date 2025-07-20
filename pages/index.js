@@ -4,7 +4,7 @@ const BOARD_SIZE = 1000;
 const INIT_ZOOM = 1;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 20;
-const CANVAS_VIEWPORT = 500;
+const CANVAS_VIEWPORT = 5;
 
 const COLORS = [
   "#FFFFFF", "#000000", "#FF0000", "#00FF00", "#0000FF",
@@ -21,6 +21,12 @@ export default function Home() {
   const [zoom, setZoom] = useState(INIT_ZOOM);
   const [message, setMessage] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
+  // 画布视角左上角坐标
+  const [view, setView] = useState({ x: 0, y: 0 });
+  // 拖动状态
+  const [dragging, setDragging] = useState(false);
+  const [dragOrigin, setDragOrigin] = useState({ x: 0, y: 0 });
+  const [dragViewOrigin, setDragViewOrigin] = useState({ x: 0, y: 0 });
 
   // 拉取画布数据
   const fetchBoard = () => {
@@ -41,43 +47,74 @@ export default function Home() {
     return () => clearInterval(interval);
   }, []);
 
-  // 渲染 Canvas
+  // 渲染 Canvas（只绘制当前视角区域）
   useEffect(() => {
     if (!board.length || !canvasRef.current) return;
     const ctx = canvasRef.current.getContext("2d");
-    ctx.clearRect(0, 0, BOARD_SIZE, BOARD_SIZE);
-    const imageData = ctx.createImageData(BOARD_SIZE, BOARD_SIZE);
-    for (let y = 0; y < BOARD_SIZE; y++) {
-      for (let x = 0; x < BOARD_SIZE; x++) {
-        const color = board[y][x] ? board[y][x] : "#FFFFFF";
-        const idx = (y * BOARD_SIZE + x) * 4;
-        const rgb = hexToRgb(color);
-        imageData.data[idx] = rgb[0];
-        imageData.data[idx + 1] = rgb[1];
-        imageData.data[idx + 2] = rgb[2];
-        imageData.data[idx + 3] = 255;
+    ctx.clearRect(0, 0, CANVAS_VIEWPORT, CANVAS_VIEWPORT);
+    const pixelSize = zoom;
+    // 视窗区域左上角坐标
+    const { x: startX, y: startY } = view;
+    for (let y = 0; y < CANVAS_VIEWPORT / pixelSize; y++) {
+      for (let x = 0; x < CANVAS_VIEWPORT / pixelSize; x++) {
+        const boardX = startX + x;
+        const boardY = startY + y;
+        if (
+          boardX >= 0 && boardX < BOARD_SIZE &&
+          boardY >= 0 && boardY < BOARD_SIZE
+        ) {
+          const color = board[boardY][boardX] ? board[boardY][boardX] : "#FFFFFF";
+          ctx.fillStyle = color;
+        } else {
+          ctx.fillStyle = "#eee"; // 边界外填充灰色
+        }
+        ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
       }
     }
-    ctx.putImageData(imageData, 0, 0);
-  }, [board]);
+    // 绘制网格线（轻微美化）
+    if (zoom >= 8) {
+      ctx.strokeStyle = "rgba(120,120,120,0.12)";
+      ctx.lineWidth = 1;
+      for (let x = 0; x <= CANVAS_VIEWPORT; x += pixelSize) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, CANVAS_VIEWPORT);
+        ctx.stroke();
+      }
+      for (let y = 0; y <= CANVAS_VIEWPORT; y += pixelSize) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(CANVAS_VIEWPORT, y);
+        ctx.stroke();
+      }
+    }
+  }, [board, view, zoom]);
 
-  // 画布点击
+  // 点色（点击当前视角内的像素）
   const handleCanvasClick = (e) => {
-    if (loading) return;
+    if (loading || dragging) return;
     if (cooldown > 0) {
       setMessage(`冷却中，请等待 ${cooldown} 秒`);
       return;
     }
+    // 获取画布相对坐标
     const rect = canvasRef.current.getBoundingClientRect();
-    const scale = rect.width / BOARD_SIZE;
-    let x = Math.floor((e.clientX - rect.left) / scale);
-    let y = Math.floor((e.clientY - rect.top) / scale);
-    x = Math.max(0, Math.min(BOARD_SIZE - 1, x));
-    y = Math.max(0, Math.min(BOARD_SIZE - 1, y));
+    const scale = rect.width / CANVAS_VIEWPORT;
+    const xInCanvas = (e.clientX - rect.left) / scale;
+    const yInCanvas = (e.clientY - rect.top) / scale;
+    const pixelSize = zoom;
+    // 视窗内坐标
+    let px = Math.floor(xInCanvas / pixelSize);
+    let py = Math.floor(yInCanvas / pixelSize);
+    // 画布实际坐标
+    let boardX = view.x + px;
+    let boardY = view.y + py;
+    boardX = Math.max(0, Math.min(BOARD_SIZE - 1, boardX));
+    boardY = Math.max(0, Math.min(BOARD_SIZE - 1, boardY));
     fetch("/api/paint", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ x, y, color: selectedColor }),
+      body: JSON.stringify({ x: boardX, y: boardY, color: selectedColor }),
     })
       .then(res => res.json())
       .then(data => {
@@ -87,6 +124,41 @@ export default function Home() {
       });
   };
 
+  // 拖动画布
+  const handleMouseDown = (e) => {
+    setDragging(true);
+    setDragOrigin({ x: e.clientX, y: e.clientY });
+    setDragViewOrigin({ ...view });
+  };
+  const handleMouseUp = () => {
+    setDragging(false);
+  };
+  const handleMouseMove = (e) => {
+    if (!dragging) return;
+    const dx = Math.round((e.clientX - dragOrigin.x) / zoom);
+    const dy = Math.round((e.clientY - dragOrigin.y) / zoom);
+    let newX = dragViewOrigin.x - dx;
+    let newY = dragViewOrigin.y - dy;
+    // 限制视角不超出画布
+    newX = Math.max(0, Math.min(BOARD_SIZE - Math.floor(CANVAS_VIEWPORT / zoom), newX));
+    newY = Math.max(0, Math.min(BOARD_SIZE - Math.floor(CANVAS_VIEWPORT / zoom), newY));
+    setView({ x: newX, y: newY });
+  };
+
+  // 适应缩放后视角（保持中心不变）
+  useEffect(() => {
+    const oldViewSize = Math.floor(CANVAS_VIEWPORT / (zoom > 1 ? zoom - 1 : zoom));
+    const newViewSize = Math.floor(CANVAS_VIEWPORT / zoom);
+    let centerX = view.x + oldViewSize / 2;
+    let centerY = view.y + oldViewSize / 2;
+    let newX = Math.round(centerX - newViewSize / 2);
+    let newY = Math.round(centerY - newViewSize / 2);
+    newX = Math.max(0, Math.min(BOARD_SIZE - newViewSize, newX));
+    newY = Math.max(0, Math.min(BOARD_SIZE - newViewSize, newY));
+    setView({ x: newX, y: newY });
+    // eslint-disable-next-line
+  }, [zoom]);
+
   useEffect(() => {
     if (cooldown > 0) {
       const timer = setInterval(() => {
@@ -95,11 +167,6 @@ export default function Home() {
       return () => clearInterval(timer);
     }
   }, [cooldown]);
-
-  // 缩放处理
-  const handleZoomChange = (value) => {
-    setZoom(value);
-  };
 
   // 悬浮调色板
   const paletteBtnSize = 54;
@@ -182,21 +249,27 @@ export default function Home() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          overflow: "hidden"
+          overflow: "hidden",
+          position: "relative"
         }}>
           <canvas
             ref={canvasRef}
-            width={BOARD_SIZE}
-            height={BOARD_SIZE}
+            width={CANVAS_VIEWPORT}
+            height={CANVAS_VIEWPORT}
             style={{
-              width: CANVAS_VIEWPORT * zoom,
-              height: CANVAS_VIEWPORT * zoom,
-              cursor: cooldown > 0 ? "not-allowed" : "crosshair",
+              width: CANVAS_VIEWPORT,
+              height: CANVAS_VIEWPORT,
+              cursor: dragging ? "grab" : (cooldown > 0 ? "not-allowed" : "crosshair"),
               borderRadius: 12,
               background: "#fff",
-              display: loading ? "none" : "block"
+              display: loading ? "none" : "block",
+              transition: "box-shadow 0.16s"
             }}
             onClick={handleCanvasClick}
+            onMouseDown={handleMouseDown}
+            onMouseUp={handleMouseUp}
+            onMouseLeave={handleMouseUp}
+            onMouseMove={handleMouseMove}
           />
           {loading && (
             <div style={{
@@ -209,6 +282,20 @@ export default function Home() {
               fontSize: 20
             }}>加载中...</div>
           )}
+          {/* 坐标/视角信息 */}
+          <div style={{
+            position: "absolute",
+            left: 12,
+            bottom: 12,
+            background: "rgba(255,255,255,0.85)",
+            color: "#333",
+            padding: "4px 10px",
+            borderRadius: 6,
+            fontSize: 13,
+            boxShadow: "0 2px 8px #0001"
+          }}>
+            视角：({view.x}, {view.y})&nbsp;|&nbsp;区域：{Math.floor(CANVAS_VIEWPORT/zoom)}x{Math.floor(CANVAS_VIEWPORT/zoom)}
+          </div>
         </div>
         {message && (
           <div style={{
@@ -229,7 +316,6 @@ export default function Home() {
           flexDirection: "column",
           alignItems: "flex-end"
         }}>
-          {/* 展开色板 */}
           <div style={{
             transition: "all 0.3s",
             opacity: paletteOpen ? 1 : 0,
@@ -265,7 +351,6 @@ export default function Home() {
               />
             ))}
           </div>
-          {/* 悬浮按钮 */}
           <button
             onClick={() => setPaletteOpen(!paletteOpen)}
             style={{
@@ -295,7 +380,6 @@ export default function Home() {
   );
 }
 
-// HEX转RGB
 function hexToRgb(hex) {
   let h = hex.replace("#", "");
   if (h.length === 3) h = h.split("").map(x => x + x).join("");
