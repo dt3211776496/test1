@@ -42,5 +42,5 @@ export default function handler(req, res) {
 
   // 设置新冷却cookie
   res.setHeader("Set-Cookie", `lastPaint=${Date.now()}; path=/; max-age=3600; HttpOnly`);
-  res.status(200).json({ board, cooldown: 60 });
+  res.status(200).json({ board, cooldown: 1 });
 }
