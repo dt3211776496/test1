@@ -4,7 +4,7 @@ const BOARD_SIZE = 1000;
 const INIT_ZOOM = 1;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 20;
-const CANVAS_VIEWPORT = 5;
+const CANVAS_VIEWPORT = 500;
 
 const COLORS = [
   "#FFFFFF", "#000000", "#FF0000", "#00FF00", "#0000FF",
