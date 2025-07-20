@@ -1,6 +1,5 @@
 import { parse } from "cookie";
 
-// 画布内存存储
 const BOARD_SIZE = 1000;
 let board = global.pixelBoard;
 if (!board) {
@@ -11,7 +10,7 @@ if (!board) {
 }
 
 export default function handler(req, res) {
-  // 冷却机制（基于 cookie）
+  // 冷却机制（cookie）
   let cooldown = 0;
   const cookies = req.headers.cookie ? parse(req.headers.cookie) : {};
   if (cookies.lastPaint) {

@@ -24,7 +24,7 @@ export default function handler(req, res) {
     return;
   }
 
-  // 冷却机制（基于 cookie）
+  // 冷却机制（cookie）
   const cookies = req.headers.cookie ? parse(req.headers.cookie) : {};
   let cooldown = 0;
   if (cookies.lastPaint) {
