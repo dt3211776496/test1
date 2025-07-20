@@ -16,7 +16,7 @@ export default function handler(req, res) {
   if (cookies.lastPaint) {
     const lastPaint = parseInt(cookies.lastPaint);
     const now = Date.now();
-    cooldown = Math.max(0, 60 - Math.floor((now - lastPaint) / 1000));
+    cooldown = Math.max(0, 1 - Math.floor((now - lastPaint) / 1000));
   }
   res.status(200).json({ board, cooldown });
 }
