@@ -21,9 +21,7 @@ export default function Home() {
   const [zoom, setZoom] = useState(INIT_ZOOM);
   const [message, setMessage] = useState("");
   const [paletteOpen, setPaletteOpen] = useState(false);
-  // 画布视角左上角坐标
   const [view, setView] = useState({ x: 0, y: 0 });
-  // 拖动状态
   const [dragging, setDragging] = useState(false);
   const [dragOrigin, setDragOrigin] = useState({ x: 0, y: 0 });
   const [dragViewOrigin, setDragViewOrigin] = useState({ x: 0, y: 0 });
@@ -53,7 +51,6 @@ export default function Home() {
     const ctx = canvasRef.current.getContext("2d");
     ctx.clearRect(0, 0, CANVAS_VIEWPORT, CANVAS_VIEWPORT);
     const pixelSize = zoom;
-    // 视窗区域左上角坐标
     const { x: startX, y: startY } = view;
     for (let y = 0; y < CANVAS_VIEWPORT / pixelSize; y++) {
       for (let x = 0; x < CANVAS_VIEWPORT / pixelSize; x++) {
@@ -66,12 +63,12 @@ export default function Home() {
           const color = board[boardY][boardX] ? board[boardY][boardX] : "#FFFFFF";
           ctx.fillStyle = color;
         } else {
-          ctx.fillStyle = "#eee"; // 边界外填充灰色
+          ctx.fillStyle = "#eee";
         }
         ctx.fillRect(x * pixelSize, y * pixelSize, pixelSize, pixelSize);
       }
     }
-    // 绘制网格线（轻微美化）
+    // 网格线
     if (zoom >= 8) {
       ctx.strokeStyle = "rgba(120,120,120,0.12)";
       ctx.lineWidth = 1;
@@ -97,16 +94,13 @@ export default function Home() {
       setMessage(`冷却中，请等待 ${cooldown} 秒`);
       return;
     }
-    // 获取画布相对坐标
     const rect = canvasRef.current.getBoundingClientRect();
     const scale = rect.width / CANVAS_VIEWPORT;
     const xInCanvas = (e.clientX - rect.left) / scale;
     const yInCanvas = (e.clientY - rect.top) / scale;
     const pixelSize = zoom;
-    // 视窗内坐标
     let px = Math.floor(xInCanvas / pixelSize);
     let py = Math.floor(yInCanvas / pixelSize);
-    // 画布实际坐标
     let boardX = view.x + px;
     let boardY = view.y + py;
     boardX = Math.max(0, Math.min(BOARD_SIZE - 1, boardX));
@@ -139,7 +133,6 @@ export default function Home() {
     const dy = Math.round((e.clientY - dragOrigin.y) / zoom);
     let newX = dragViewOrigin.x - dx;
     let newY = dragViewOrigin.y - dy;
-    // 限制视角不超出画布
     newX = Math.max(0, Math.min(BOARD_SIZE - Math.floor(CANVAS_VIEWPORT / zoom), newX));
     newY = Math.max(0, Math.min(BOARD_SIZE - Math.floor(CANVAS_VIEWPORT / zoom), newY));
     setView({ x: newX, y: newY });
@@ -168,13 +161,35 @@ export default function Home() {
     }
   }, [cooldown]);
 
+  // 触摸拖动（移动端）
+  const handleTouchStart = (e) => {
+    if (e.touches.length === 1) {
+      setDragging(true);
+      setDragOrigin({ x: e.touches[0].clientX, y: e.touches[0].clientY });
+      setDragViewOrigin({ ...view });
+    }
+  };
+  const handleTouchMove = (e) => {
+    if (!dragging || e.touches.length !== 1) return;
+    const dx = Math.round((e.touches[0].clientX - dragOrigin.x) / zoom);
+    const dy = Math.round((e.touches[0].clientY - dragOrigin.y) / zoom);
+    let newX = dragViewOrigin.x - dx;
+    let newY = dragViewOrigin.y - dy;
+    newX = Math.max(0, Math.min(BOARD_SIZE - Math.floor(CANVAS_VIEWPORT / zoom), newX));
+    newY = Math.max(0, Math.min(BOARD_SIZE - Math.floor(CANVAS_VIEWPORT / zoom), newY));
+    setView({ x: newX, y: newY });
+  };
+  const handleTouchEnd = () => {
+    setDragging(false);
+  };
+
   // 悬浮调色板
   const paletteBtnSize = 54;
 
   return (
     <div style={{
       minHeight: "100vh",
-      background: "linear-gradient(135deg,#e9e9f6 0%,#fafcff 100%)",
+      background: "linear-gradient(120deg, #f1f3f9 0%, #e0edff 100%)",
       fontFamily: "system-ui,sans-serif",
       display: "flex",
       alignItems: "center",
@@ -182,68 +197,81 @@ export default function Home() {
     }}>
       <div style={{
         width: CANVAS_VIEWPORT + 48,
-        background: "#fff",
-        borderRadius: 16,
-        boxShadow: "0 4px 24px #0002",
-        padding: "32px 24px",
-        position: "relative"
+        background: "rgba(255,255,255,0.85)",
+        borderRadius: 24,
+        boxShadow: "0 8px 32px 0 rgba(0,0,0,0.07)",
+        padding: "40px 28px",
+        position: "relative",
+        backdropFilter: "blur(12px)"
       }}>
         <h2 style={{
           textAlign: "center",
           margin: 0,
-          fontWeight: 600,
-          fontSize: 24
+          fontWeight: 700,
+          fontSize: 28,
+          letterSpacing: 1,
+          color: "#2a2a2a",
+          textShadow: "0 2px 16px #f2f2f2"
         }}>像素大战</h2>
-        <div style={{
-          textAlign: "center",
-          marginBottom: 12,
-          display: "flex",
-          justifyContent: "center",
-          alignItems: "center",
-          gap: 20
-        }}>
+        <div
+          style={{
+            marginBottom: 16,
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            gap: 24
+          }}
+        >
           <button
             onClick={fetchBoard}
             style={{
-              padding: "4px 16px",
-              borderRadius: 6,
+              padding: "8px 24px",
+              borderRadius: 12,
               border: "none",
-              background: "#eee",
-              fontWeight: 500,
-              cursor: "pointer"
+              background: "linear-gradient(90deg,#dbeafe 0%,#f3f4f6 100%)",
+              fontWeight: 600,
+              fontSize: 16,
+              color: "#2a44bb",
+              cursor: "pointer",
+              boxShadow: "0 2px 12px #c4d3ff44",
+              transition: "box-shadow .2s"
             }}
-          >刷新</button>
+          >刷新画布</button>
           <div style={{
-            fontSize: 15,
-            color: "#555",
+            fontSize: 16,
+            color: "#444",
             minWidth: 120,
-            textAlign: "center"
+            textAlign: "center",
+            fontWeight: 500,
+            borderRadius: 8,
+            background: "rgba(230,240,255,0.6)",
+            padding: "6px 12px"
           }}>
             {cooldown > 0 ? `冷却：${cooldown}秒` : "可点色"}
           </div>
           <div style={{
             display: "flex",
             alignItems: "center",
-            gap: 6
+            gap: 10
           }}>
-            <span style={{ fontSize: 14, color: "#888" }}>缩放</span>
+            <span style={{ fontSize: 15, color: "#6e7ca0" }}>缩放</span>
             <input
               type="range"
               min={MIN_ZOOM}
               max={MAX_ZOOM}
               value={zoom}
               onChange={e => setZoom(Number(e.target.value))}
-              style={{ width: 80 }}
+              style={{ width: 100 }}
             />
-            <span style={{ fontSize: 14 }}>{zoom}x</span>
+            <span style={{ fontSize: 15 }}>{zoom}x</span>
           </div>
         </div>
         <div style={{
           margin: "0 auto",
-          border: "2px solid #444",
-          borderRadius: 12,
-          boxShadow: "0 2px 16px #0001",
-          background: "#fafcff",
+          border: "2px solid #b5c5ea",
+          borderRadius: 18,
+          boxShadow: "0 4px 24px #b5c5ea33",
+          background: "rgba(245,248,255,0.94)",
           width: CANVAS_VIEWPORT,
           height: CANVAS_VIEWPORT,
           display: "flex",
@@ -260,9 +288,10 @@ export default function Home() {
               width: CANVAS_VIEWPORT,
               height: CANVAS_VIEWPORT,
               cursor: dragging ? "grab" : (cooldown > 0 ? "not-allowed" : "crosshair"),
-              borderRadius: 12,
+              borderRadius: 18,
               background: "#fff",
               display: loading ? "none" : "block",
+              boxShadow: "0 6px 16px #b5c5ea11",
               transition: "box-shadow 0.16s"
             }}
             onClick={handleCanvasClick}
@@ -270,6 +299,9 @@ export default function Home() {
             onMouseUp={handleMouseUp}
             onMouseLeave={handleMouseUp}
             onMouseMove={handleMouseMove}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+            onTouchMove={handleTouchMove}
           />
           {loading && (
             <div style={{
@@ -282,53 +314,56 @@ export default function Home() {
               fontSize: 20
             }}>加载中...</div>
           )}
-          {/* 坐标/视角信息 */}
           <div style={{
             position: "absolute",
-            left: 12,
-            bottom: 12,
-            background: "rgba(255,255,255,0.85)",
-            color: "#333",
-            padding: "4px 10px",
-            borderRadius: 6,
-            fontSize: 13,
-            boxShadow: "0 2px 8px #0001"
+            left: 14,
+            bottom: 14,
+            background: "rgba(255,255,255,0.9)",
+            color: "#2a44bb",
+            padding: "6px 14px",
+            borderRadius: 8,
+            fontSize: 15,
+            boxShadow: "0 2px 8px #b5c5ea11",
+            fontWeight: 600,
+            opacity: 0.96
           }}>
-            视角：({view.x}, {view.y})&nbsp;|&nbsp;区域：{Math.floor(CANVAS_VIEWPORT/zoom)}x{Math.floor(CANVAS_VIEWPORT/zoom)}
+            视角：({view.x}, {view.y}) | 区域：{Math.floor(CANVAS_VIEWPORT/zoom)}x{Math.floor(CANVAS_VIEWPORT/zoom)}
           </div>
         </div>
         {message && (
           <div style={{
             color: "#d00",
-            marginTop: 20,
+            marginTop: 26,
             textAlign: "center",
-            fontWeight: 500
+            fontWeight: 600,
+            fontSize: 16,
+            letterSpacing: 1
           }}>{message}</div>
         )}
 
         {/* 悬浮调色板 */}
         <div style={{
           position: "fixed",
-          right: 32,
-          bottom: 32,
+          right: 38,
+          bottom: 38,
           zIndex: 9999,
           display: "flex",
           flexDirection: "column",
           alignItems: "flex-end"
         }}>
           <div style={{
-            transition: "all 0.3s",
+            transition: "all 0.35s cubic-bezier(.4,.7,.4,1.2)",
             opacity: paletteOpen ? 1 : 0,
             pointerEvents: paletteOpen ? "auto" : "none",
-            transform: paletteOpen ? "translateY(0)" : "translateY(20px)",
-            marginBottom: paletteOpen ? 16 : 0,
-            boxShadow: "0 4px 24px #0003",
-            borderRadius: 18,
-            background: "#fff",
-            padding: paletteOpen ? "14px 14px 6px 14px" : "0",
+            transform: paletteOpen ? "translateY(0) scale(1)" : "translateY(20px) scale(0.85)",
+            marginBottom: paletteOpen ? 20 : 0,
+            boxShadow: "0 4px 32px #b5c5ea55",
+            borderRadius: 20,
+            background: "rgba(255,255,255,0.98)",
+            padding: paletteOpen ? "22px 20px 10px 20px" : "0",
             display: paletteOpen ? "grid" : "none",
             gridTemplateColumns: "repeat(5, 36px)",
-            gap: "8px"
+            gap: "14px"
           }}>
             {COLORS.map(c => (
               <button
@@ -337,11 +372,11 @@ export default function Home() {
                   background: c,
                   width: 34, height: 34,
                   borderRadius: "50%",
-                  border: selectedColor === c ? "3px solid #444" : "1px solid #ccc",
+                  border: selectedColor === c ? "3px solid #2a44bb" : "2px solid #e8e8ee",
                   cursor: "pointer",
                   outline: "none",
-                  boxShadow: selectedColor === c ? "0 0 0 2px #8882" : "",
-                  transition: "border 0.15s"
+                  boxShadow: selectedColor === c ? "0 0 0 4px #b5c5ea55" : "",
+                  transition: "border 0.16s"
                 }}
                 onClick={() => {
                   setSelectedColor(c);
@@ -359,7 +394,7 @@ export default function Home() {
               borderRadius: "50%",
               border: "none",
               background: selectedColor,
-              boxShadow: "0 2px 16px #0002",
+              boxShadow: "0 6px 22px #b5c5ea33",
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
