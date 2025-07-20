@@ -1,10 +1,10 @@
 import { useRef, useEffect, useState } from "react";
 
-const BOARD_SIZE = 1000; // 画布尺寸
-const PIXEL_SIZE = 1;    // 每像素实际大小
-const INIT_ZOOM = 1;     // 初始缩放倍数
+const BOARD_SIZE = 1000;
+const INIT_ZOOM = 1;
 const MIN_ZOOM = 1;
 const MAX_ZOOM = 20;
+const CANVAS_VIEWPORT = 500; // 画布显示窗口（px）
 
 const COLORS = [
   "#FFFFFF", "#000000", "#FF0000", "#00FF00", "#0000FF",
@@ -48,7 +48,8 @@ export default function Home() {
     const imageData = ctx.createImageData(BOARD_SIZE, BOARD_SIZE);
     for (let y = 0; y < BOARD_SIZE; y++) {
       for (let x = 0; x < BOARD_SIZE; x++) {
-        const color = board[y][x] || "#FFFFFF";
+        // 确保每个像素都渲染成有效颜色
+        const color = board[y][x] ? board[y][x] : "#FFFFFF";
         const idx = (y * BOARD_SIZE + x) * 4;
         const rgb = hexToRgb(color);
         imageData.data[idx] = rgb[0];
@@ -68,11 +69,9 @@ export default function Home() {
       return;
     }
     const rect = canvasRef.current.getBoundingClientRect();
-    const scale = (rect.width / BOARD_SIZE);
-    // 获取鼠标在canvas上的坐标，根据缩放倍数对齐像素
+    const scale = rect.width / BOARD_SIZE;
     let x = Math.floor((e.clientX - rect.left) / scale);
     let y = Math.floor((e.clientY - rect.top) / scale);
-    // 点击像素中心自动对齐，防止误点
     x = Math.max(0, Math.min(BOARD_SIZE - 1, x));
     y = Math.max(0, Math.min(BOARD_SIZE - 1, y));
     fetch("/api/paint", {
@@ -88,7 +87,6 @@ export default function Home() {
       });
   };
 
-  // 冷却倒计时
   useEffect(() => {
     if (cooldown > 0) {
       const timer = setInterval(() => {
@@ -98,21 +96,17 @@ export default function Home() {
     }
   }, [cooldown]);
 
-  // 缩放处理
-  const handleZoomChange = (value) => {
-    setZoom(value);
-  };
-
   return (
     <div style={{
-      padding: 0,
       minHeight: "100vh",
       background: "linear-gradient(135deg,#e9e9f6 0%,#fafcff 100%)",
-      fontFamily: "system-ui,sans-serif"
+      fontFamily: "system-ui,sans-serif",
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "center"
     }}>
       <div style={{
-        maxWidth: 680,
-        margin: "32px auto",
+        width: CANVAS_VIEWPORT + 48,
         background: "#fff",
         borderRadius: 16,
         boxShadow: "0 4px 24px #0002",
@@ -123,8 +117,7 @@ export default function Home() {
           textAlign: "center",
           margin: 0,
           fontWeight: 600,
-          fontSize: 24,
-          letterSpacing: 1
+          fontSize: 24
         }}>像素大战</h2>
         <div style={{
           margin: "28px 0 18px 0",
@@ -156,7 +149,7 @@ export default function Home() {
           display: "flex",
           justifyContent: "center",
           alignItems: "center",
-          gap: 16
+          gap: 20
         }}>
           <button
             onClick={fetchBoard}
@@ -168,14 +161,14 @@ export default function Home() {
               fontWeight: 500,
               cursor: "pointer"
             }}
-          >刷新画布</button>
+          >刷新</button>
           <div style={{
             fontSize: 15,
             color: "#555",
             minWidth: 120,
             textAlign: "center"
           }}>
-            {cooldown > 0 ? `冷却：${cooldown}秒` : "可立即点色"}
+            {cooldown > 0 ? `冷却：${cooldown}秒` : "可点色"}
           </div>
           <div style={{
             display: "flex",
@@ -188,7 +181,7 @@ export default function Home() {
               min={MIN_ZOOM}
               max={MAX_ZOOM}
               value={zoom}
-              onChange={e => handleZoomChange(Number(e.target.value))}
+              onChange={e => setZoom(Number(e.target.value))}
               style={{ width: 80 }}
             />
             <span style={{ fontSize: 14 }}>{zoom}x</span>
@@ -197,24 +190,25 @@ export default function Home() {
         <div style={{
           margin: "0 auto",
           border: "2px solid #444",
-          borderRadius: 8,
+          borderRadius: 12,
+          boxShadow: "0 2px 16px #0001",
           background: "#fafcff",
-          height: `${500 * zoom / INIT_ZOOM}px`,
-          width: `${500 * zoom / INIT_ZOOM}px`,
+          width: CANVAS_VIEWPORT,
+          height: CANVAS_VIEWPORT,
           display: "flex",
           alignItems: "center",
-          justifyContent: "center"
+          justifyContent: "center",
+          overflow: "hidden"
         }}>
           <canvas
             ref={canvasRef}
             width={BOARD_SIZE}
             height={BOARD_SIZE}
             style={{
-              width: 500 * zoom,
-              height: 500 * zoom,
+              width: CANVAS_VIEWPORT * zoom,
+              height: CANVAS_VIEWPORT * zoom,
               cursor: cooldown > 0 ? "not-allowed" : "crosshair",
-              borderRadius: 8,
-              boxShadow: "0 2px 8px #0001",
+              borderRadius: 12,
               background: "#fff",
               display: loading ? "none" : "block"
             }}
@@ -222,8 +216,8 @@ export default function Home() {
           />
           {loading && (
             <div style={{
-              width: 500 * zoom,
-              height: 500 * zoom,
+              width: CANVAS_VIEWPORT,
+              height: CANVAS_VIEWPORT,
               display: "flex",
               alignItems: "center",
               justifyContent: "center",
@@ -245,9 +239,11 @@ export default function Home() {
   );
 }
 
+// HEX转RGB
 function hexToRgb(hex) {
   let h = hex.replace("#", "");
   if (h.length === 3) h = h.split("").map(x => x + x).join("");
+  if (h === "") return [255, 255, 255]; // 空色渲染成白色
   const num = parseInt(h, 16);
   return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
 }
